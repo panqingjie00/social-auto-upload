@@ -69,6 +69,7 @@ class DouyinNoteUploadRequest:
     note: str
     tags: list[str]
     publish_date: datetime | int
+    bgm: str = ""
     publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE
     debug: bool = True
     headless: bool = True
@@ -311,6 +312,7 @@ async def upload_note(request: DouyinNoteUploadRequest) -> Path:
         tags=request.tags,
         publish_date=request.publish_date,
         account_file=str(account_file),
+        bgm=request.bgm,
         publish_strategy=request.publish_strategy,
         debug=request.debug,
         headless=request.headless,
@@ -531,6 +533,7 @@ def build_parser() -> argparse.ArgumentParser:
     upload_note_parser.add_argument("--title", required=True, help="Note title")
     upload_note_parser.add_argument("--note", default="", help="Optional note content")
     upload_note_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
+    upload_note_parser.add_argument("--bgm", default="", help="BGM track name to search; left empty to pick a random recommended track")
     upload_note_parser.add_argument("--schedule", type=schedule_value, help=f"Schedule time in {schedule_help}")
     add_runtime_flags(upload_note_parser)
 
@@ -673,6 +676,7 @@ async def dispatch(args: argparse.Namespace) -> int:
                 note=args.note,
                 tags=parse_tags(args.tags),
                 publish_date=args.schedule or 0,
+                bgm=args.bgm,
                 publish_strategy=publish_strategy,
                 debug=args.debug,
                 headless=args.headless,

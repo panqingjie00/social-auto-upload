@@ -581,6 +581,7 @@ class DouYinNote(DouYinBaseUploader):
         publish_date: datetime | int,
         account_file,
         title: str | None = None,
+        bgm: str = "",
         publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool = LOCAL_CHROME_HEADLESS,
@@ -596,6 +597,7 @@ class DouYinNote(DouYinBaseUploader):
         self.note = note or ""
         self.title = title or (self.note[:30] if self.note else "")
         self.tags = tags or []
+        self.bgm = bgm or ""
 
     async def validate_upload_args(self):
         await self.validate_base_args()
@@ -614,6 +616,51 @@ class DouYinNote(DouYinBaseUploader):
         for image_path in self.image_paths:
             normalized_image_paths.append(str(self.validate_image_file(image_path)))
         self.image_paths = normalized_image_paths
+
+    async def _select_bgm(self, page: Page) -> None:
+        """Select background music for the image note.
+
+        If ``self.bgm`` is non-empty, search for that track name and pick
+        the first result.  Otherwise pick the first track in the "推荐" tab.
+        """
+        try:
+            # ── step 1: click the second "选择音乐" (the action button, not the label) ──
+            action_btn = page.locator(".action-Q1y01k")
+            if await action_btn.count() == 0:
+                douyin_logger.info(_msg("🎵", "未找到选择音乐按钮，跳过 BGM"))
+                return
+            await action_btn.click()
+            douyin_logger.info(_msg("🎵", "已打开音乐选择窗口"))
+            await page.wait_for_timeout(2000)
+
+            # ── step 2: search or browse ──
+            if self.bgm:
+                douyin_logger.info(_msg("🎵", f"正在搜索 BGM: {self.bgm}"))
+                search_box = page.get_by_placeholder("搜索音乐")
+                if await search_box.count() > 0:
+                    await search_box.fill(self.bgm)
+                    await page.wait_for_timeout(2000)
+
+            # ── step 3: hover first song card to reveal "使用", then click ──
+            await page.wait_for_timeout(800)
+
+            first_card = page.locator(".music-collection-container-cTsB7J .card-container-tmocjc").first
+            use_btn = page.locator(".apply-btn-LUPP0D").first
+
+            if await first_card.count() > 0:
+                await first_card.hover()
+                await page.wait_for_timeout(600)
+
+            if await use_btn.count() > 0 and await use_btn.is_visible():
+                await use_btn.click()
+                douyin_logger.info(_msg("🎵", f"已选择 BGM: {self.bgm or '推荐'}"))
+            else:
+                douyin_logger.info(_msg("🎵", "未找到使用按钮，按 ESC 关闭面板"))
+                await page.locator("body").press("Escape")
+
+            await page.wait_for_timeout(1000)
+        except Exception as exc:
+            douyin_logger.warning(_msg("🎵", f"BGM 选择异常（不影响发布）: {exc}"))
 
     async def upload_note_content(self, page: Page) -> None:
         douyin_logger.info(_msg("🏃", f"小人开始搬运图文，共 {len(self.image_paths)} 张图片"))
@@ -640,6 +687,8 @@ class DouYinNote(DouYinBaseUploader):
         douyin_logger.info(_msg("✍️", "小人开始填标题、描述和话题"))
         await self.fill_title_and_description(page, self.title, self.note, self.tags)
         douyin_logger.info(_msg("🏷️", f"小人一共贴了 {len(self.tags)} 个话题"))
+
+        await self._select_bgm(page)
 
         if self.publish_strategy == DOUYIN_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time_douyin(page, self.publish_date)
