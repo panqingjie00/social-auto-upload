@@ -10,7 +10,7 @@ The project consists of a Python backend and a Vue.js frontend.
 *   Core Functionality:
     *   Handles file uploads and management.
     *   Interacts with a SQLite database to store information about files and user accounts.
-    *   Uses `playwright` for browser automation to interact with social media platforms.
+    *   Uses `patchright` for browser automation to interact with social media platforms.
     *   Provides a RESTful API for the frontend to consume.
     *   Uses Server-Sent Events (SSE) for real-time communication with the frontend during the login process.
 
@@ -27,88 +27,134 @@ The project consists of a Python backend and a Vue.js frontend.
 
 **Command-line Interface:**
 
-The project also provides a command-line interface (CLI) for users who prefer to work from the terminal. For new Douyin CLI work, prefer the `sau douyin ...` entrypoint over legacy example scripts.
+The project provides a unified CLI entry point `sau`, currently supporting four main platforms:
 
-*   `login`: To log in to the Douyin uploader account.
-*   `check`: To verify whether the saved Douyin cookie is still valid.
-*   `upload`: To upload one video file with explicit metadata flags.
+*   `douyin`   — login / check / upload-video / upload-note
+*   `kuaishou` — login / check / upload-video / upload-note
+*   `xiaohongshu` — login / check / upload-video / upload-note
+*   `bilibili` — login / check / upload-video
+
+The CLI is implemented in `sau_cli.py`. Prefer `sau <platform> ...` over legacy `examples/` scripts or the old web path.
 
 ## Building and Running
 
-### Backend
+### Prerequisites
 
-1.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+*   Python >=3.10, <3.13
+*   `uv` (recommended) — `pip install uv`
 
-2.  **Install Playwright browser drivers:**
-    ```bash
-    playwright install chromium
-    ```
-
-3.  **Initialize the database:**
-    ```bash
-    python db/createTable.py
-    ```
-
-4.  **Run the backend server:**
-    ```bash
-    python sau_backend.py
-    ```
-    The backend server will start on `http://localhost:5409`.
-
-### Frontend
-
-1.  **Navigate to the frontend directory:**
-    ```bash
-    cd sau_frontend
-    ```
-
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-
-3.  **Run the development server:**
-    ```bash
-    npm run dev
-    ```
-    The frontend development server will start on `http://localhost:5173`.
-
-### Command-line Interface
-
-To use the CLI, you can run the `cli_main.py` script with the appropriate arguments.
-
-**Login:**
+### Install
 
 ```bash
-sau douyin login --account <account_name>
+uv venv
+source .venv/bin/activate   # or .venv\Scripts\activate on Windows
+uv pip install -e .
 ```
 
-**Check:**
+### Install Chromium
 
 ```bash
-sau douyin check --account <account_name>
+# China mirror (faster):
+$env:PLAYWRIGHT_DOWNLOAD_HOST="https://npmmirror.com/mirrors/playwright"; patchright install chromium  # Windows PowerShell
+PLAYWRIGHT_DOWNLOAD_HOST="https://npmmirror.com/mirrors/playwright" patchright install chromium       # Linux/macOS
+
+# Default source:
+patchright install chromium
 ```
 
-**Upload:**
+### Configuration
 
 ```bash
-sau douyin upload --account <account_name> --file <video_file> --title <title> [--tags tag1,tag2] [--schedule YYYY-MM-DD HH:MM]
+cp conf.example.py conf.py   # then edit conf.py as needed
 ```
 
-**Install bundled skill:**
+Key config items: `LOCAL_CHROME_PATH`, `LOCAL_CHROME_HEADLESS`, `DEBUG_MODE`.
+
+### Verify
 
 ```bash
-sau skill install
+sau --help
+sau douyin --help
+sau kuaishou --help
+sau xiaohongshu --help
+sau bilibili --help
 ```
+
+Further details: `docs/install.md`, `docs/CLI.md`.
+
+## CLI Usage
+
+### Common flags
+
+```
+--debug              Enable debug mode
+--headed / --headless Control browser visibility (default: headless)
+```
+
+### Douyin
+
+```bash
+sau douyin login --account <name>
+sau douyin check --account <name>
+
+# Video upload
+sau douyin upload-video --account <name> --file <video> --title "标题" \
+    [--desc "描述"] [--tags tag1,tag2] [--schedule "YYYY-MM-DD HH:MM"] \
+    [--thumbnail <image>] [--product-link <url>] [--product-title "商品名"]
+
+# Image note (图文) upload
+sau douyin upload-note --account <name> --images 1.png 2.png --title "标题" \
+    [--note "正文"] [--tags tag1,tag2] [--schedule "YYYY-MM-DD HH:MM"] \
+    [--bgm "晴天"]
+```
+
+`--bgm`: optional BGM track name. When omitted, the first recommended track is picked randomly. When provided, searches the music panel and selects the first result.
+
+### Kuaishou
+
+```bash
+sau kuaishou login --account <name>
+sau kuaishou check --account <name>
+sau kuaishou upload-video --account <name> --file <video> --title "标题" \
+    [--desc "描述"] [--tags tag1,tag2] [--schedule "YYYY-MM-DD HH:MM"]
+sau kuaishou upload-note --account <name> --images 1.png 2.png --title "标题" \
+    [--note "正文"] [--tags tag1,tag2] [--schedule "YYYY-MM-DD HH:MM"]
+```
+
+### Xiaohongshu
+
+```bash
+sau xiaohongshu login --account <name>
+sau xiaohongshu check --account <name>
+sau xiaohongshu upload-video --account <name> --file <video> --title "标题" \
+    [--desc "描述"] [--tags tag1,tag2] [--schedule "YYYY-MM-DD HH:MM"]
+sau xiaohongshu upload-note --account <name> --images 1.png 2.png 3.png --title "标题" \
+    [--note "正文"] [--tags tag1,tag2] [--schedule "YYYY-MM-DD HH:MM"]
+```
+
+### Bilibili
+
+```bash
+sau bilibili login --account <name>
+sau bilibili check --account <name>
+sau bilibili upload-video --account <name> --file <video> --title "标题" \
+    --desc "描述" --tid <category_id> \
+    [--tags tag1,tag2] [--schedule "YYYY-MM-DD HH:MM"]
+```
+
+Bilibili login requires a local interactive terminal. If the terminal QR code renders poorly, open `./qrcode.png` to scan. The `biliup` binary is auto-downloaded on first run.
+
+### Login QR codes
+
+Douyin / Kuaishou / Xiaohongshu logins may generate temporary QR code images. Display these images directly to the user for scanning — do not just output the file path.
 
 ## Development Conventions
 
-*   The backend code is located in the root directory and the `myUtils` and `uploader` directories.
-*   The frontend code is located in the `sau_frontend` directory.
-*   The project uses a SQLite database for data storage. The database file is located at `db/database.db`.
-*   The `conf.example.py` file should be copied to `conf.py` and configured with the appropriate settings.
-*   The `requirements.txt` file lists the Python dependencies.
-*   The `package.json` file in the `sau_frontend` directory lists the frontend dependencies.
+*   Backend code is in the root directory, `myUtils/`, and `uploader/`.
+*   Frontend code is in `sau_frontend/`.
+*   SQLite database: `db/database.db`.
+*   Config: copy `conf.example.py` → `conf.py`.
+*   Use `uv` for dependency management; `pyproject.toml` is the source of truth. `requirements.txt` is historical only.
+*   `sau_cli.py` is the CLI entry point; `uploader/` contains per-platform implementations.
+*   The old Web backend (`sau_backend.py`) and `examples/` directory are legacy and may not be current.
+*   Platform skill docs are in `skills/<platform>-upload/`.
