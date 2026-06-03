@@ -620,9 +620,12 @@ class DouYinNote(DouYinBaseUploader):
     async def _select_bgm(self, page: Page) -> None:
         """Select background music for the image note.
 
-        If ``self.bgm`` is non-empty, search for that track name and pick
-        the first result.  Otherwise pick the first track in the "推荐" tab.
+        If ``self.bgm`` is non-empty, search for that track name, then pick
+        the result with the highest usage count.  Otherwise pick the first
+        track in the "推荐" tab.
         """
+        import re
+
         try:
             # ── step 1: click the second "选择音乐" (the action button, not the label) ──
             action_btn = page.locator(".action-Q1y01k")
@@ -641,16 +644,50 @@ class DouYinNote(DouYinBaseUploader):
                     await search_box.fill(self.bgm)
                     await page.wait_for_timeout(2000)
 
-            # ── step 3: hover first song card to reveal "使用", then click ──
+            # ── step 3: pick the card with the highest usage count ──
             await page.wait_for_timeout(800)
 
-            first_card = page.locator(".music-collection-container-cTsB7J .card-container-tmocjc").first
-            use_btn = page.locator(".apply-btn-LUPP0D").first
+            cards = page.locator(".card-container-tmocjc")
+            card_count = await cards.count()
 
-            if await first_card.count() > 0:
-                await first_card.hover()
-                await page.wait_for_timeout(600)
+            if card_count == 0:
+                douyin_logger.info(_msg("🎵", "未找到音乐卡片，按 ESC 关闭面板"))
+                await page.locator("body").press("Escape")
+                await page.wait_for_timeout(1000)
+                return
 
+            best_idx = 0
+            best_count: float = -1
+
+            for i in range(card_count):
+                try:
+                    text = (await cards.nth(i).text_content()) or ""
+                    match = re.search(r"([\d.]+)\s*(亿|万)?\s*人\s*使用", text)
+                    if match:
+                        num = float(match.group(1))
+                        unit = match.group(2)
+                        if unit == "亿":
+                            num *= 100_000_000
+                        elif unit == "万":
+                            num *= 10_000
+                        if num > best_count:
+                            best_count = num
+                            best_idx = i
+                except Exception:
+                    continue
+
+            if best_count >= 0:
+                douyin_logger.info(
+                    _msg("🎵", f"选择使用人数最多的: {best_count:,.0f}" if best_count >= 10000 else f"选择使用人数最多的: {best_count:.0f}")
+                )
+            else:
+                douyin_logger.info(_msg("🎵", f"无法解析使用人数，回退到第一个结果"))
+
+            target_card = cards.nth(best_idx)
+            await target_card.hover()
+            await page.wait_for_timeout(600)
+
+            use_btn = target_card.locator(".apply-btn-LUPP0D")
             if await use_btn.count() > 0 and await use_btn.is_visible():
                 await use_btn.click()
                 douyin_logger.info(_msg("🎵", f"已选择 BGM: {self.bgm or '推荐'}"))

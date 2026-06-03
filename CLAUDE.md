@@ -148,6 +148,12 @@ Bilibili login requires a local interactive terminal. If the terminal QR code re
 
 Douyin / Kuaishou / Xiaohongshu logins may generate temporary QR code images. Display these images directly to the user for scanning — do not just output the file path.
 
+## Project Memory (mandatory)
+
+This project has persistent memory files at `C:\Users\86178\.claude\projects\E--social-auto-upload\memory\`. The index (`MEMORY.md`) is auto-loaded into context, but individual memory files are NOT.
+
+**Before executing any task**, scan the MEMORY.md index for relevant entries. If ANY entry matches the task at hand, you MUST `Read` the full memory file before acting. Do NOT rely on the one-line summary alone — it is a pointer, not the full rule.
+
 ## Development Conventions
 
 *   Backend code is in the root directory, `myUtils/`, and `uploader/`.
